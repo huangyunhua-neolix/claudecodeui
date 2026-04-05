@@ -347,7 +347,7 @@ router.put('/claude-models', async (req, res) => {
 router.get('/copilot-models', async (req, res) => {
   try {
     const settings = await ReadClaudeSettings();
-    const base_url = settings.env?.ANTHROPIC_BASE_URL || 'https://api.anthropic.com';
+    const base_url = settings._anthropic_upstream_url || 'https://api.anthropic.com';
     const response = await fetch(`${base_url}/v1/models`);
     if (!response.ok) {
       throw new Error(`Models API returned ${response.status}`);
