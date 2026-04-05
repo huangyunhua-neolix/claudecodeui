@@ -45,7 +45,7 @@ import fetch from 'node-fetch';
 import mime from 'mime-types';
 
 import { getProjects, getSessions, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache, searchConversations } from './projects.js';
-import { queryClaudeSDK, abortClaudeSDKSession, isClaudeSDKSessionActive, getActiveClaudeSDKSessions, resolveToolApproval, getPendingApprovalsForSession, reconnectSessionWriter } from './claude-sdk.js';
+import { SpawnClaude, AbortClaudeSession, IsClaudeSessionActive, GetActiveClaudeSessions } from './claude-cli.js';
 import { spawnCursor, abortCursorSession, isCursorSessionActive, getActiveCursorSessions } from './cursor-cli.js';
 import { queryCodex, abortCodexSession, isCodexSessionActive, getActiveCodexSessions } from './openai-codex.js';
 import { spawnGemini, abortGeminiSession, isGeminiSessionActive, getActiveGeminiSessions } from './gemini-cli.js';
@@ -1493,8 +1493,8 @@ function handleChatConnection(ws, request) {
                 console.log('📁 Project:', data.options?.projectPath || 'Unknown');
                 console.log('🔄 Session:', data.options?.sessionId ? 'Resume' : 'New');
 
-                // Use Claude Agents SDK
-                await queryClaudeSDK(data.command, data.options, writer);
+                // Use Claude CLI subprocess
+                await SpawnClaude(data.command, data.options, writer);
             } else if (data.type === 'cursor-command') {
                 console.log('[DEBUG] Cursor message:', data.command || '[Continue/Resume]');
                 console.log('📁 Project:', data.options?.cwd || 'Unknown');
@@ -1533,23 +1533,14 @@ function handleChatConnection(ws, request) {
                 } else if (provider === 'gemini') {
                     success = abortGeminiSession(data.sessionId);
                 } else {
-                    // Use Claude Agents SDK
-                    success = await abortClaudeSDKSession(data.sessionId);
+                    // Use Claude CLI subprocess
+                    success = AbortClaudeSession(data.sessionId);
                 }
 
                 writer.send(createNormalizedMessage({ kind: 'complete', exitCode: success ? 0 : 1, aborted: true, success, sessionId: data.sessionId, provider }));
             } else if (data.type === 'claude-permission-response') {
-                // Relay UI approval decisions back into the SDK control flow.
-                // This does not persist permissions; it only resolves the in-flight request,
-                // introduced so the SDK can resume once the user clicks Allow/Deny.
-                if (data.requestId) {
-                    resolveToolApproval(data.requestId, {
-                        allow: Boolean(data.allow),
-                        updatedInput: data.updatedInput,
-                        message: data.message,
-                        rememberEntry: data.rememberEntry
-                    });
-                }
+                // CLI mode: permission decisions are handled by the CLI itself
+                console.log('[INFO] Permission response received (CLI mode - handled by CLI process)');
             } else if (data.type === 'cursor-abort') {
                 console.log('[DEBUG] Abort Cursor session:', data.sessionId);
                 const success = abortCursorSession(data.sessionId);
@@ -1567,13 +1558,8 @@ function handleChatConnection(ws, request) {
                 } else if (provider === 'gemini') {
                     isActive = isGeminiSessionActive(sessionId);
                 } else {
-                    // Use Claude Agents SDK
-                    isActive = isClaudeSDKSessionActive(sessionId);
-                    if (isActive) {
-                        // Reconnect the session's writer to the new WebSocket so
-                        // subsequent SDK output flows to the refreshed client.
-                        reconnectSessionWriter(sessionId, ws);
-                    }
+                    // Use Claude CLI subprocess
+                    isActive = IsClaudeSessionActive(sessionId);
                 }
 
                 writer.send({
@@ -1583,20 +1569,16 @@ function handleChatConnection(ws, request) {
                     isProcessing: isActive
                 });
             } else if (data.type === 'get-pending-permissions') {
-                // Return pending permission requests for a session
-                const sessionId = data.sessionId;
-                if (sessionId && isClaudeSDKSessionActive(sessionId)) {
-                    const pending = getPendingApprovalsForSession(sessionId);
-                    writer.send({
-                        type: 'pending-permissions-response',
-                        sessionId,
-                        data: pending
-                    });
-                }
+                // CLI mode: pending permissions are handled by the CLI process
+                writer.send({
+                    type: 'pending-permissions-response',
+                    sessionId: data.sessionId,
+                    data: []
+                });
             } else if (data.type === 'get-active-sessions') {
                 // Get all currently active sessions
                 const activeSessions = {
-                    claude: getActiveClaudeSDKSessions(),
+                    claude: GetActiveClaudeSessions(),
                     cursor: getActiveCursorSessions(),
                     codex: getActiveCodexSessions(),
                     gemini: getActiveGeminiSessions()
@@ -2530,7 +2512,7 @@ async function startServer() {
         const isProduction = fs.existsSync(distIndexPath);
 
         // Log Claude implementation mode
-        console.log(`${c.info('[INFO]')} Using Claude Agents SDK for Claude integration`);
+        console.log(`${c.info('[INFO]')} Using Claude CLI subprocess for Claude integration`);
         console.log('');
 
         if (isProduction) {

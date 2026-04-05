@@ -170,16 +170,7 @@ export default function ChatComposer({
 
   return (
     <div className={`flex-shrink-0 p-2 pb-2 sm:p-4 sm:pb-4 md:p-4 md:pb-6 ${mobileFloatingClass}`}>
-      {!hasQuestionPanel && (
-        <div className="flex-1">
-          <ClaudeStatus
-            status={claudeStatus}
-            isLoading={isLoading}
-            onAbort={onAbortSession}
-            provider={provider}
-          />
-        </div>
-      )}
+      {/* Status bar removed — stop action moved to send button */}
 
       <div className="mx-auto mb-3 max-w-4xl">
         <PermissionRequestsBanner
@@ -325,23 +316,39 @@ export default function ChatComposer({
               <MicButton onTranscript={onTranscript} className="h-10 w-10 sm:h-10 sm:w-10" />
             </div>
 
-            <button
-              type="submit"
-              disabled={!input.trim() || isLoading}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                onSubmit(event);
-              }}
-              onTouchStart={(event) => {
-                event.preventDefault();
-                onSubmit(event);
-              }}
-              className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 transform items-center justify-center rounded-xl bg-primary transition-all duration-200 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1 focus:ring-offset-background disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground sm:h-11 sm:w-11"
-            >
-              <svg className="h-4 w-4 rotate-90 transform text-primary-foreground sm:h-[18px] sm:w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            </button>
+            {isLoading ? (
+              <button
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  onAbortSession();
+                }}
+                className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 transform items-center justify-center rounded-xl bg-blue-500 transition-all duration-200 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400/30 sm:h-11 sm:w-11"
+                title="Stop Generation (Esc)"
+              >
+                <svg className="h-4 w-4 text-white sm:h-[18px] sm:w-[18px]" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!input.trim()}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  onSubmit(event);
+                }}
+                onTouchStart={(event) => {
+                  event.preventDefault();
+                  onSubmit(event);
+                }}
+                className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 transform items-center justify-center rounded-xl bg-primary transition-all duration-200 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1 focus:ring-offset-background disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground sm:h-11 sm:w-11"
+              >
+                <svg className="h-4 w-4 rotate-90 transform text-primary-foreground sm:h-[18px] sm:w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              </button>
+            )}
 
             <div
               className={`pointer-events-none absolute bottom-1 left-12 right-14 hidden text-xs text-muted-foreground/50 transition-opacity duration-200 sm:right-40 sm:block ${

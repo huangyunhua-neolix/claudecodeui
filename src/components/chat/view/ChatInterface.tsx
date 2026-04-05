@@ -9,7 +9,7 @@ import { useChatSessionState } from '../hooks/useChatSessionState';
 import { useChatRealtimeHandlers } from '../hooks/useChatRealtimeHandlers';
 import { useChatComposerState } from '../hooks/useChatComposerState';
 import { useSessionStore } from '../../../stores/useSessionStore';
-import ChatMessagesPane from './subcomponents/ChatMessagesPane';
+import RawOutputPane from './subcomponents/RawOutputPane';
 import ChatComposer from './subcomponents/ChatComposer';
 
 
@@ -295,49 +295,13 @@ function ChatInterface({
   return (
     <>
       <div className="flex h-full flex-col">
-        <ChatMessagesPane
+        <RawOutputPane
           scrollContainerRef={scrollContainerRef}
           onWheel={handleScroll}
           onTouchMove={handleScroll}
-          isLoadingSessionMessages={isLoadingSessionMessages}
           chatMessages={chatMessages}
-          selectedSession={selectedSession}
-          currentSessionId={currentSessionId}
-          provider={provider}
-          setProvider={(nextProvider) => setProvider(nextProvider as Provider)}
-          textareaRef={textareaRef}
-          claudeModel={claudeModel}
-          setClaudeModel={setClaudeModel}
-          cursorModel={cursorModel}
-          setCursorModel={setCursorModel}
-          codexModel={codexModel}
-          setCodexModel={setCodexModel}
-          geminiModel={geminiModel}
-          setGeminiModel={setGeminiModel}
-          tasksEnabled={tasksEnabled}
-          isTaskMasterInstalled={isTaskMasterInstalled}
-          onShowAllTasks={onShowAllTasks}
-          setInput={setInput}
-          isLoadingMoreMessages={isLoadingMoreMessages}
-          hasMoreMessages={hasMoreMessages}
-          totalMessages={totalMessages}
-          sessionMessagesCount={chatMessages.length}
-          visibleMessageCount={visibleMessageCount}
           visibleMessages={visibleMessages}
-          loadEarlierMessages={loadEarlierMessages}
-          loadAllMessages={loadAllMessages}
-          allMessagesLoaded={allMessagesLoaded}
-          isLoadingAllMessages={isLoadingAllMessages}
-          loadAllJustFinished={loadAllJustFinished}
-          showLoadAllOverlay={showLoadAllOverlay}
-          createDiff={createDiff}
-          onFileOpen={onFileOpen}
-          onShowSettings={onShowSettings}
-          onGrantToolPermission={handleGrantToolPermission}
-          autoExpandTools={autoExpandTools}
-          showRawParameters={showRawParameters}
-          showThinking={showThinking}
-          selectedProject={selectedProject}
+          provider={provider}
           isLoading={isLoading}
         />
 
