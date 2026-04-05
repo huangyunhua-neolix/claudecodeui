@@ -122,7 +122,7 @@ export default function RawOutputPane({
     bottom_anchor_ref.current?.scrollIntoView({ behavior: 'smooth' });
   }, [visibleMessages.length, visibleMessages[visibleMessages.length - 1]?.content]);
 
-  const messages_to_show = visibleMessages.length > 0 ? visibleMessages : chatMessages;
+  const messages_to_show = visibleMessages;
 
   return (
     <div
@@ -137,9 +137,10 @@ export default function RawOutputPane({
             <span>Waiting for input...</span>
           </div>
         ) : (
-          messages_to_show.map((message, index) => (
-            <RawMessageLine key={`raw-${index}-${message.timestamp}`} message={message} />
-          ))
+          messages_to_show.map((message) => {
+            const key = `${message.type}-${message.timestamp}-${message.toolId || ''}-${String(message.content || '').slice(0, 32)}`;
+            return <RawMessageLine key={key} message={message} />;
+          })
         )}
 
         {isLoading && (

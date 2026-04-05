@@ -185,6 +185,7 @@ async function SpawnClaude(command, options = {}, ws) {
           case 'assistant': {
             if (
               response.message &&
+              response.message.role !== 'user' &&
               response.message.content &&
               response.message.content.length > 0
             ) {
