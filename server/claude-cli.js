@@ -57,10 +57,8 @@ async function SpawnClaude(command, options = {}, ws) {
       base_args.push('--verbose');
       base_args.push('--include-partial-messages');
 
-      // Model selection
-      if (!sessionId && model) {
-        base_args.push('--model', model);
-      }
+      // Don't pass --model here; let Claude CLI read ANTHROPIC_MODEL
+      // from ~/.claude/settings.json so model selection via Settings UI works.
     }
 
     // Permission mode

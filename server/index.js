@@ -66,6 +66,7 @@ import codexRoutes from './routes/codex.js';
 import geminiRoutes from './routes/gemini.js';
 import pluginsRoutes from './routes/plugins.js';
 import messagesRoutes from './routes/messages.js';
+import anthropicProxyRoutes from './routes/anthropic-proxy.js';
 import { createNormalizedMessage } from './providers/types.js';
 import { startEnabledPluginServers, stopAllPlugins, getPluginPort } from './utils/plugin-process-manager.js';
 import { initializeDatabase, sessionNamesDb, applyCustomSessionNames } from './database/db.js';
@@ -352,6 +353,9 @@ app.get('/health', (req, res) => {
         installMode
     });
 });
+
+// Anthropic API proxy (no auth – only used by local Claude CLI subprocess)
+app.use('/anthropic-proxy', anthropicProxyRoutes);
 
 // Optional API key validation (if configured)
 app.use('/api', validateApiKey);
@@ -2498,6 +2502,40 @@ const HOST = process.env.HOST || '0.0.0.0';
 const DISPLAY_HOST = getConnectableHost(HOST);
 const VITE_PORT = process.env.VITE_PORT || 5173;
 
+// Ensure ~/.claude/settings.json routes ANTHROPIC_BASE_URL through our proxy
+// so we can transform parameters for GPT / O-series model compatibility.
+async function ensureAnthropicProxy() {
+    const settingsPath = path.join(os.homedir(), '.claude', 'settings.json');
+    const proxyUrl = `http://127.0.0.1:${SERVER_PORT}/anthropic-proxy`;
+
+    try {
+        let settings = {};
+        try {
+            const content = await fsPromises.readFile(settingsPath, 'utf8');
+            settings = JSON.parse(content);
+        } catch { /* file may not exist yet */ }
+
+        const currentBaseUrl = settings.env?.ANTHROPIC_BASE_URL;
+        const alreadyProxied = currentBaseUrl === proxyUrl;
+
+        // If ANTHROPIC_BASE_URL exists and isn't already our proxy, save the
+        // real URL and redirect to our proxy.
+        if (currentBaseUrl && !alreadyProxied) {
+            settings._anthropic_upstream_url = currentBaseUrl;
+            settings.env.ANTHROPIC_BASE_URL = proxyUrl;
+            await fsPromises.writeFile(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
+            console.log(`${c.info('[INFO]')} Anthropic proxy: ${currentBaseUrl} → ${proxyUrl}`);
+        } else if (!currentBaseUrl) {
+            // No ANTHROPIC_BASE_URL set, nothing to proxy
+            console.log(`${c.dim('[INFO]')} Anthropic proxy: no ANTHROPIC_BASE_URL configured, skipping`);
+        } else {
+            console.log(`${c.dim('[INFO]')} Anthropic proxy: already configured → ${proxyUrl}`);
+        }
+    } catch (error) {
+        console.error('Failed to configure Anthropic proxy:', error.message);
+    }
+}
+
 // Initialize database and start server
 async function startServer() {
     try {
@@ -2506,6 +2544,9 @@ async function startServer() {
 
         // Configure Web Push (VAPID keys)
         configureWebPush();
+
+        // Configure Anthropic API proxy for GPT model compatibility
+        await ensureAnthropicProxy();
 
         // Check if running in production mode (dist folder exists)
         const distIndexPath = path.join(__dirname, '../dist/index.html');
