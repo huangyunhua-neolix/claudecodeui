@@ -1,4 +1,8 @@
 import express from 'express';
+import { promises as fs } from 'fs';
+import path from 'path';
+import os from 'os';
+import fetch from 'node-fetch';
 import { apiKeysDb, credentialsDb, notificationPreferencesDb, pushSubscriptionsDb } from '../database/db.js';
 import { getPublicKey } from '../services/vapid-keys.js';
 import { createNotificationEvent, notifyUserIfEnabled } from '../services/notification-orchestrator.js';
@@ -270,6 +274,94 @@ router.post('/push/unsubscribe', async (req, res) => {
   } catch (error) {
     console.error('Error removing push subscription:', error);
     res.status(500).json({ error: 'Failed to remove push subscription' });
+  }
+});
+
+// ===============================
+// Claude Model Settings
+// ===============================
+
+const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
+
+async function ReadClaudeSettings() {
+  try {
+    const content = await fs.readFile(CLAUDE_SETTINGS_PATH, 'utf8');
+    return JSON.parse(content);
+  } catch {
+    return {};
+  }
+}
+
+async function WriteClaudeSettings(settings) {
+  const dir = path.dirname(CLAUDE_SETTINGS_PATH);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2), 'utf8');
+}
+
+// Get current model settings from ~/.claude/settings.json
+router.get('/claude-models', async (req, res) => {
+  try {
+    const settings = await ReadClaudeSettings();
+    const env = settings.env || {};
+    res.json({
+      model: env.ANTHROPIC_MODEL || '',
+      smallModel: env.ANTHROPIC_SMALL_FAST_MODEL || '',
+    });
+  } catch (error) {
+    console.error('Error reading Claude model settings:', error);
+    res.status(500).json({ error: 'Failed to read Claude model settings' });
+  }
+});
+
+// Update model settings in ~/.claude/settings.json
+router.put('/claude-models', async (req, res) => {
+  try {
+    const { model, smallModel } = req.body;
+    const settings = await ReadClaudeSettings();
+    if (!settings.env) settings.env = {};
+
+    if (model !== undefined) {
+      if (model) {
+        settings.env.ANTHROPIC_MODEL = model;
+      } else {
+        delete settings.env.ANTHROPIC_MODEL;
+      }
+    }
+    if (smallModel !== undefined) {
+      if (smallModel) {
+        settings.env.ANTHROPIC_SMALL_FAST_MODEL = smallModel;
+      } else {
+        delete settings.env.ANTHROPIC_SMALL_FAST_MODEL;
+      }
+    }
+
+    await WriteClaudeSettings(settings);
+    res.json({ success: true, model: settings.env.ANTHROPIC_MODEL || '', smallModel: settings.env.ANTHROPIC_SMALL_FAST_MODEL || '' });
+  } catch (error) {
+    console.error('Error saving Claude model settings:', error);
+    res.status(500).json({ error: 'Failed to save Claude model settings' });
+  }
+});
+
+// Fetch available models from copilot-api (ANTHROPIC_BASE_URL/v1/models)
+router.get('/copilot-models', async (req, res) => {
+  try {
+    const settings = await ReadClaudeSettings();
+    const base_url = settings.env?.ANTHROPIC_BASE_URL || 'https://api.anthropic.com';
+    const response = await fetch(`${base_url}/v1/models`);
+    if (!response.ok) {
+      throw new Error(`Models API returned ${response.status}`);
+    }
+    const data = await response.json();
+    const models = (data.data || []).map((m) => ({
+      id: m.id,
+      name: m.display_name || m.id,
+      owner: m.owned_by || '',
+    }));
+    res.json({ models });
+  } catch (error) {
+    console.error('Error fetching copilot models:', error);
+    res.status(500).json({ error: 'Failed to fetch model list', models: [] });
   }
 });
 
