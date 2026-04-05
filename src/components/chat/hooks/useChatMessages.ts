@@ -47,6 +47,15 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
               taskStatus: taskNotifMatch[1]?.trim() || 'completed',
             });
           } else {
+            // Filter out system-generated content injected into user messages
+            // (e.g., skill definitions, base directory paths, ARGUMENTS blocks)
+            if (
+              content.includes('Base directory for this skill:') ||
+              content.includes('ARGUMENTS:') ||
+              content.startsWith('# ') && content.includes('SKILL')
+            ) {
+              continue;
+            }
             converted.push({
               type: 'user',
               content: unescapeWithMathProtection(decodeHtmlEntities(content)),

@@ -264,9 +264,10 @@ export default function ChatMessagesPane({
 
       {isLoading && (() => {
         const lastMsg = visibleMessages[visibleMessages.length - 1];
-        const streamingText = lastMsg?.isStreaming ? (lastMsg.content || '') : '';
-        return <AssistantThinkingIndicator selectedProvider={provider} streamingPreview={streamingText} />;
-      })()}
+        const isWaitingForFirstReply = !lastMsg || lastMsg.type === 'user';
+        const hasStreaming = visibleMessages.some(m => m.isStreaming);
+        return isWaitingForFirstReply && !hasStreaming;
+      })() && <AssistantThinkingIndicator selectedProvider={provider} />}
     </div>
   );
 }
