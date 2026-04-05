@@ -262,7 +262,11 @@ export default function ChatMessagesPane({
         </>
       )}
 
-      {isLoading && <AssistantThinkingIndicator selectedProvider={provider} />}
+      {isLoading && (() => {
+        const lastMsg = visibleMessages[visibleMessages.length - 1];
+        const streamingText = lastMsg?.isStreaming ? (lastMsg.content || '') : '';
+        return <AssistantThinkingIndicator selectedProvider={provider} streamingPreview={streamingText} />;
+      })()}
     </div>
   );
 }

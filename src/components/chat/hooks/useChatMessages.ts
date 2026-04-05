@@ -31,6 +31,9 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
         const content = msg.content || '';
         if (!content.trim()) continue;
 
+        // Hide internal system tags not meant for display
+        if (content.includes('<local-command-caveat>')) continue;
+
         if (msg.role === 'user') {
           // Parse task notifications
           const taskNotifRegex = /<task-notification>\s*<task-id>[^<]*<\/task-id>\s*<output-file>[^<]*<\/output-file>\s*<status>([^<]*)<\/status>\s*<summary>([^<]*)<\/summary>\s*<\/task-notification>/g;
