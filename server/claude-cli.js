@@ -6,8 +6,11 @@
  * via WebSocket. Mirrors the interface of cursor-cli.js.
  */
 
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
+import { existsSync } from 'fs';
 import crossSpawn from 'cross-spawn';
+import os from 'os';
+import path from 'path';
 import { notifyRunFailed, notifyRunStopped } from './services/notification-orchestrator.js';
 import { claudeAdapter } from './providers/claude/adapter.js';
 import { createNormalizedMessage } from './providers/types.js';
@@ -15,6 +18,28 @@ import { createNormalizedMessage } from './providers/types.js';
 const spawnFunction = process.platform === 'win32' ? crossSpawn : spawn;
 
 const activeClaudeProcesses = new Map();
+
+/**
+ * Resolve the absolute path to the `claude` binary.
+ * Falls back to common install locations if not found in PATH.
+ */
+function FindClaudeBinary() {
+  try {
+    const bin = execSync('which claude', { encoding: 'utf8' }).trim();
+    if (bin) return bin;
+  } catch { /* not in PATH */ }
+
+  const candidates = [
+    path.join(os.homedir(), '.local', 'bin', 'claude'),
+    '/usr/local/bin/claude',
+    '/opt/homebrew/bin/claude',
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+
+  return 'claude';
+}
 
 /**
  * Spawns `claude` CLI as a child process and streams output to WebSocket.
@@ -83,7 +108,10 @@ async function SpawnClaude(command, options = {}, ws) {
       base_args.push('--disallowedTools', ...settings.disallowedTools);
     }
 
-    const working_dir = cwd || projectPath || process.cwd();
+    const working_dir_candidate = cwd || projectPath || process.cwd();
+    const working_dir = existsSync(working_dir_candidate)
+      ? working_dir_candidate
+      : process.cwd();
     const process_key = captured_session_id || Date.now().toString();
 
     const SettleOnce = (callback) => {
@@ -119,7 +147,8 @@ async function SpawnClaude(command, options = {}, ws) {
       }
     };
 
-    console.log('Spawning Claude CLI:', 'claude', base_args.join(' '));
+    const claude_bin = FindClaudeBinary();
+    console.log('Spawning Claude CLI:', claude_bin, base_args.join(' '));
     console.log('Working directory:', working_dir);
     console.log(
       'Session info - Input sessionId:',
@@ -128,7 +157,7 @@ async function SpawnClaude(command, options = {}, ws) {
       resume
     );
 
-    const claude_process = spawnFunction('claude', base_args, {
+    const claude_process = spawnFunction(claude_bin, base_args, {
       cwd: working_dir,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env },

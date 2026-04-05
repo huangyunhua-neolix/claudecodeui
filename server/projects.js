@@ -68,6 +68,54 @@ import os from 'os';
 import sessionManager from './sessionManager.js';
 import { applyCustomSessionNames } from './database/db.js';
 
+/**
+ * Decode a Claude project folder name (e.g. "-Users-huangyunhua-ws-foo-bar")
+ * back to an absolute path. Claude CLI encodes directory paths by replacing
+ * both `/` and `_` with `-`, so decoding is ambiguous. This function uses
+ * filesystem validation to find the correct path.
+ */
+function DecodeProjectName(encoded_name) {
+  // Naive decode: replace all hyphens with /
+  const naive = encoded_name.replace(/-/g, '/');
+  try {
+    if (fsSync.existsSync(naive)) return naive;
+  } catch { /* ignore */ }
+
+  // Recursive backtracking: try replacing each `-` with `/`, `-`, or `_`
+  // and validate against the filesystem level by level.
+  const segments = encoded_name.split('-').filter(Boolean);
+
+  function Backtrack(index, current_path) {
+    if (index >= segments.length) {
+      try {
+        if (fsSync.existsSync(current_path)) return current_path;
+      } catch { /* ignore */ }
+      return null;
+    }
+
+    const seg = segments[index];
+
+    // Option 1: this segment is a new directory level (separator was /)
+    const as_slash = current_path + '/' + seg;
+    const result1 = Backtrack(index + 1, as_slash);
+    if (result1) return result1;
+
+    // Option 2 & 3: merge with previous segment using hyphen or underscore
+    // Only valid when current_path already contains a / (i.e. we're past the root)
+    if (current_path.includes('/')) {
+      const result2 = Backtrack(index + 1, current_path + '-' + seg);
+      if (result2) return result2;
+      const result3 = Backtrack(index + 1, current_path + '_' + seg);
+      if (result3) return result3;
+    }
+
+    return null;
+  }
+
+  const result = Backtrack(0, '');
+  return result || naive;
+}
+
 // Import TaskMaster detection functions
 async function detectTaskMasterFolder(projectPath) {
   try {
@@ -236,7 +284,7 @@ async function saveProjectConfig(config) {
 // Generate better display name from path
 async function generateDisplayName(projectName, actualProjectDir = null) {
   // Use actual project directory if provided, otherwise decode from project name
-  let projectPath = actualProjectDir || projectName.replace(/-/g, '/');
+  let projectPath = actualProjectDir || DecodeProjectName(projectName);
 
   // Try to read package.json from the project path
   try {
@@ -293,7 +341,7 @@ async function extractProjectDirectory(projectName) {
 
     if (jsonlFiles.length === 0) {
       // Fall back to decoded project name if no sessions
-      extractedPath = projectName.replace(/-/g, '/');
+      extractedPath = DecodeProjectName(projectName);
     } else {
       // Process all JSONL files to collect cwd values
       for (const file of jsonlFiles) {
@@ -330,7 +378,7 @@ async function extractProjectDirectory(projectName) {
       // Determine the best cwd to use
       if (cwdCounts.size === 0) {
         // No cwd found, fall back to decoded project name
-        extractedPath = projectName.replace(/-/g, '/');
+        extractedPath = DecodeProjectName(projectName);
       } else if (cwdCounts.size === 1) {
         // Only one cwd, use it
         extractedPath = Array.from(cwdCounts.keys())[0];
@@ -354,7 +402,7 @@ async function extractProjectDirectory(projectName) {
 
         // Fallback (shouldn't reach here)
         if (!extractedPath) {
-          extractedPath = latestCwd || projectName.replace(/-/g, '/');
+          extractedPath = latestCwd || DecodeProjectName(projectName);
         }
       }
     }
@@ -367,11 +415,11 @@ async function extractProjectDirectory(projectName) {
   } catch (error) {
     // If the directory doesn't exist, just use the decoded project name
     if (error.code === 'ENOENT') {
-      extractedPath = projectName.replace(/-/g, '/');
+      extractedPath = DecodeProjectName(projectName);
     } else {
       console.error(`Error extracting project directory for ${projectName}:`, error);
       // Fall back to decoded project name for other errors
-      extractedPath = projectName.replace(/-/g, '/');
+      extractedPath = DecodeProjectName(projectName);
     }
 
     // Cache the fallback result too
@@ -549,7 +597,7 @@ async function getProjects(progressCallback = null) {
           actualProjectDir = await extractProjectDirectory(projectName);
         } catch (error) {
           // Fall back to decoded project name
-          actualProjectDir = projectName.replace(/-/g, '/');
+          actualProjectDir = DecodeProjectName(projectName);
         }
       }
 
